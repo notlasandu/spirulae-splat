@@ -81,6 +81,7 @@ jobs:
           pip3 install --upgrade pip
           pip3 install torch==2.10.0 torchvision \
             --index-url https://download.pytorch.org/whl/cu128
+          python3 -c "import torch; print(f'Torch: {torch.__version__}'); print(f'CUDA: {torch.version.cuda}')"
 
       # -----------------------------------------------------------------------
       # 4. Install Python build-time dependencies
