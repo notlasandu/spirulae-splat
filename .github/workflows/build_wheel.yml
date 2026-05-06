@@ -35,6 +35,8 @@ jobs:
       #    API which does not support `submodules: true`.
       # -----------------------------------------------------------------------
       - name: Install Git
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update -q
           apt-get install -y --no-install-recommends git
@@ -48,6 +50,8 @@ jobs:
           submodules: true
 
       - name: Install system dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update -q
           apt-get install -y --no-install-recommends software-properties-common curl git ninja-build cmake libgl1 libglib2.0-0
