@@ -82,16 +82,6 @@ jobs:
           pip3 install torch==2.10.0 torchvision \
             --index-url https://download.pytorch.org/whl/cu128
           python3 -c "import torch; print(f'Torch: {torch.__version__}'); print(f'CUDA: {torch.version.cuda}')"
-          
-          # Hack: Patch torch to ignore CUDA version mismatch
-          TORCH_PATH=$(python3 -c "import torch, os; print(os.path.dirname(torch.__file__))")
-          # 1. Delete compiled bytecode to force reload
-          find "${TORCH_PATH}" -name "*.pyc" -delete
-          # 2. Global replacement of the specific error
-          sed -i 's/raise RuntimeError(CUDA_MISMATCH_MESSAGE/pass #/g' "${TORCH_PATH}/utils/cpp_extension.py"
-          
-          # Verify the patch
-          grep -C 5 "CUDA_MISMATCH_MESSAGE" "${TORCH_PATH}/utils/cpp_extension.py" | head -n 20
 
       # -----------------------------------------------------------------------
       # 4. Install Python build-time dependencies
@@ -115,6 +105,29 @@ jobs:
             "torchmetrics[image]" \
             typing_extensions \
             tabulate
+
+      # -----------------------------------------------------------------------
+      # 5. Patch torch to ignore CUDA version mismatch (HAPPENS LAST)
+      #    We do this here because Step 4 might have re-installed torch.
+      # -----------------------------------------------------------------------
+      - name: Patch PyTorch
+        run: |
+          TORCH_PATH=$(python3 -c "import torch, os; print(os.path.dirname(torch.__file__))")
+          echo "Patching torch at: ${TORCH_PATH}"
+          
+          # 1. Delete compiled bytecode to force reload
+          find "${TORCH_PATH}" -name "*.pyc" -delete
+          
+          # 2. Global replacement of the specific error
+          # This replaces any 'raise RuntimeError(CUDA_MISMATCH_MESSAGE' with 'pass'
+          sed -i 's/raise RuntimeError(CUDA_MISMATCH_MESSAGE/pass #/g' "${TORCH_PATH}/utils/cpp_extension.py"
+          
+          # 3. Double-check for type-hinted signatures just in case
+          sed -i '/def _check_cuda_version(/a \    return' "${TORCH_PATH}/utils/cpp_extension.py"
+          
+          # Verify the patch
+          grep -A 2 "_check_cuda_version" "${TORCH_PATH}/utils/cpp_extension.py"
+          grep "pass #" "${TORCH_PATH}/utils/cpp_extension.py" || true
 
       # -----------------------------------------------------------------------
       # 5. Build spirulae_splat wheel
