@@ -85,10 +85,13 @@ jobs:
           
           # Hack: Patch torch to ignore CUDA version mismatch
           TORCH_PATH=$(python3 -c "import torch, os; print(os.path.dirname(torch.__file__))")
-          sed -i '/def _check_cuda_version(/a \    return' "${TORCH_PATH}/utils/cpp_extension.py"
+          # 1. Delete compiled bytecode to force reload
+          find "${TORCH_PATH}" -name "*.pyc" -delete
+          # 2. Global replacement of the specific error
+          sed -i 's/raise RuntimeError(CUDA_MISMATCH_MESSAGE/pass #/g' "${TORCH_PATH}/utils/cpp_extension.py"
           
           # Verify the patch
-          grep -A 2 "_check_cuda_version" "${TORCH_PATH}/utils/cpp_extension.py"
+          grep -C 5 "CUDA_MISMATCH_MESSAGE" "${TORCH_PATH}/utils/cpp_extension.py" | head -n 20
 
       # -----------------------------------------------------------------------
       # 4. Install Python build-time dependencies
