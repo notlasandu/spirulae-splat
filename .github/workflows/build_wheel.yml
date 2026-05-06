@@ -30,6 +30,16 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
+      # 0. Install Git before checkout — the CUDA Docker image does not include
+      #    git by default. Without it, actions/checkout falls back to the REST
+      #    API which does not support `submodules: true`.
+      # -----------------------------------------------------------------------
+      - name: Install Git
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends git
+
+      # -----------------------------------------------------------------------
       # 1. Checkout repo + submodules (glm headers live in a submodule)
       # -----------------------------------------------------------------------
       - name: Checkout repository
