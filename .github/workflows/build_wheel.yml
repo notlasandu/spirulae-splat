@@ -26,7 +26,7 @@ jobs:
     # nvidia/cuda devel image: includes nvcc + CUDA headers.
     # No physical GPU needed — nvcc cross-compiles for specified arch targets.
     container:
-      image: nvidia/cuda:12.4.1-devel-ubuntu22.04
+      image: nvidia/cuda:12.8.0-devel-ubuntu22.04
 
     steps:
       # -----------------------------------------------------------------------
@@ -47,36 +47,36 @@ jobs:
         with:
           submodules: true
 
-      # -----------------------------------------------------------------------
-      # 2. Install system dependencies
-      # -----------------------------------------------------------------------
       - name: Install system dependencies
         run: |
           apt-get update -q
+          apt-get install -y --no-install-recommends software-properties-common curl git ninja-build cmake libgl1 libglib2.0-0
+          add-apt-repository ppa:deadsnakes/ppa -y
+          apt-get update -q
           apt-get install -y --no-install-recommends \
-            python3.10 \
-            python3-pip \
-            python3.10-dev \
-            python3.10-distutils \
-            ninja-build \
-            cmake \
-            git \
-            curl \
-            libgl1 \
-            libglib2.0-0
-          # Make python3.10 the default python3
-          update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+            python3.12 \
+            python3.12-dev \
+            python3.12-venv \
+            python3-pip
+          
+          # Make python3.12 the default python3
+          update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+          
+          # Install pip module for 3.12
+          curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+          python3 get-pip.py
+          
           python3 --version
 
       # -----------------------------------------------------------------------
-      # 3. Install PyTorch matching Colab's current default (cu121 = CUDA 12.1)
+      # 3. Install PyTorch matching Colab's current default (cu128 = CUDA 12.8)
       #    Update this when Colab upgrades its default PyTorch version.
       # -----------------------------------------------------------------------
       - name: Install PyTorch (Colab default)
         run: |
           pip3 install --upgrade pip
-          pip3 install torch==2.5.1 torchvision \
-            --index-url https://download.pytorch.org/whl/cu121
+          pip3 install torch==2.10.0 torchvision \
+            --index-url https://download.pytorch.org/whl/cu128
 
       # -----------------------------------------------------------------------
       # 4. Install Python build-time dependencies
@@ -131,6 +131,7 @@ jobs:
           echo "Building fused_bilagrid wheel..."
           pip3 wheel \
             "fused_bilagrid @ git+https://github.com/harry7557558/fused-bilagrid.git@dev" \
+            --no-build-isolation \
             --no-deps \
             -w wheelhouse/
           echo "=== All wheels ==="
@@ -174,8 +175,8 @@ jobs:
 
             | Package | PyTorch | CUDA | GPU Targets |
             |---|---|---|---|
-            | spirulae_splat | 2.5.1 | 12.1 | T4 (7.5), A100 (8.0), A10G/L4 (8.6), H100 (9.0) |
-            | fused_bilagrid | 2.5.1 | 12.1 | T4 (7.5), A100 (8.0), A10G/L4 (8.6), H100 (9.0) |
+            | spirulae_splat | 2.10.0 | 12.8 | T4 (7.5), A100 (8.0), A10G/L4 (8.6), H100 (9.0) |
+            | fused_bilagrid | 2.10.0 | 12.8 | T4 (7.5), A100 (8.0), A10G/L4 (8.6), H100 (9.0) |
 
             ### Usage in Google Colab
             ```python
@@ -185,7 +186,7 @@ jobs:
             !pip install {BASE}/fused_bilagrid-*.whl
             ```
 
-            > **Note:** These wheels are tied to **PyTorch 2.5.1 + CUDA 12.1**. If Colab updates its default PyTorch, re-trigger this workflow via the Actions tab → "Run workflow".
+            > **Note:** These wheels are tied to **PyTorch 2.10.0 + CUDA 12.8**. If Colab updates its default PyTorch, re-trigger this workflow via the Actions tab → "Run workflow".
           files: wheelhouse/*.whl
           fail_on_unmatched_files: true
         env:
