@@ -1,0 +1,182 @@
+name: Build & Release Wheel
+
+# Triggers:
+#   - Push to spirulae-colab branch  → builds wheel, creates/updates a Release
+#   - Manual run from GitHub UI (Actions tab → "Run workflow")
+on:
+  push:
+    branches:
+      - spirulae-colab
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag name (e.g. v2026.4.1). Leave empty to use build number.'
+        required: false
+        default: ''
+
+# Required so the workflow can create/update Releases
+permissions:
+  contents: write
+
+jobs:
+  build-wheel:
+    name: Build CUDA Wheels
+    runs-on: ubuntu-latest
+
+    # nvidia/cuda devel image: includes nvcc + CUDA headers.
+    # No physical GPU needed — nvcc cross-compiles for specified arch targets.
+    container:
+      image: nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout repo + submodules (glm headers live in a submodule)
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # -----------------------------------------------------------------------
+      # 2. Install system dependencies
+      # -----------------------------------------------------------------------
+      - name: Install system dependencies
+        run: |
+          apt-get update -q
+          apt-get install -y --no-install-recommends \
+            python3.10 \
+            python3-pip \
+            python3.10-dev \
+            python3.10-distutils \
+            ninja-build \
+            cmake \
+            git \
+            curl \
+            libgl1 \
+            libglib2.0-0
+          # Make python3.10 the default python3
+          update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+          python3 --version
+
+      # -----------------------------------------------------------------------
+      # 3. Install PyTorch matching Colab's current default (cu121 = CUDA 12.1)
+      #    Update this when Colab upgrades its default PyTorch version.
+      # -----------------------------------------------------------------------
+      - name: Install PyTorch (Colab default)
+        run: |
+          pip3 install --upgrade pip
+          pip3 install torch==2.5.1 torchvision \
+            --index-url https://download.pytorch.org/whl/cu121
+
+      # -----------------------------------------------------------------------
+      # 4. Install Python build-time dependencies
+      # -----------------------------------------------------------------------
+      - name: Install build dependencies
+        run: |
+          pip3 install \
+            setuptools \
+            wheel \
+            ninja \
+            psutil \
+            jaxtyping \
+            tyro \
+            opencv-python-headless \
+            plyfile \
+            open3d \
+            matplotlib \
+            Pillow \
+            rawpy \
+            pytorch-msssim \
+            "torchmetrics[image]" \
+            typing_extensions \
+            tabulate
+
+      # -----------------------------------------------------------------------
+      # 5. Build spirulae_splat wheel
+      #    TORCH_CUDA_ARCH_LIST targets: T4=7.5, A100=8.0, A10G/L4=8.6, H100=9.0
+      #    MAX_JOBS=4 keeps memory usage reasonable on the runner
+      # -----------------------------------------------------------------------
+      - name: Build spirulae_splat wheel
+        env:
+          TORCH_CUDA_ARCH_LIST: "7.5;8.0;8.6;9.0"
+          MAX_JOBS: "4"
+        run: |
+          echo "Building spirulae_splat wheel..."
+          pip3 wheel . \
+            --no-build-isolation \
+            --no-deps \
+            -w wheelhouse/ \
+            -v
+          echo "=== Wheel contents ==="
+          ls -lh wheelhouse/
+
+      # -----------------------------------------------------------------------
+      # 6. Build fused_bilagrid wheel (separate CUDA extension dependency)
+      # -----------------------------------------------------------------------
+      - name: Build fused_bilagrid wheel
+        env:
+          TORCH_CUDA_ARCH_LIST: "7.5;8.0;8.6;9.0"
+          MAX_JOBS: "4"
+        run: |
+          echo "Building fused_bilagrid wheel..."
+          pip3 wheel \
+            "fused_bilagrid @ git+https://github.com/harry7557558/fused-bilagrid.git@dev" \
+            --no-deps \
+            -w wheelhouse/
+          echo "=== All wheels ==="
+          ls -lh wheelhouse/
+
+      # -----------------------------------------------------------------------
+      # 7. Always upload wheels as a workflow artifact (accessible even without
+      #    a Release, e.g. on PR builds or failed Release uploads)
+      # -----------------------------------------------------------------------
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spirulae-wheels
+          path: wheelhouse/*.whl
+          retention-days: 30
+
+      # -----------------------------------------------------------------------
+      # 8. Determine the release tag
+      # -----------------------------------------------------------------------
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=build-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      # -----------------------------------------------------------------------
+      # 9. Create or update GitHub Release with the wheels attached
+      # -----------------------------------------------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Wheel Build #${{ github.run_number }}"
+          body: |
+            ## Pre-built wheels for spirulae-splat
+
+            Built automatically from commit `${{ github.sha }}` on branch `${{ github.ref_name }}`.
+
+            | Package | PyTorch | CUDA | GPU Targets |
+            |---|---|---|---|
+            | spirulae_splat | 2.5.1 | 12.1 | T4 (7.5), A100 (8.0), A10G/L4 (8.6), H100 (9.0) |
+            | fused_bilagrid | 2.5.1 | 12.1 | T4 (7.5), A100 (8.0), A10G/L4 (8.6), H100 (9.0) |
+
+            ### Usage in Google Colab
+            ```python
+            # Replace BUILD_N with the build number (e.g. build-1)
+            BASE = "https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}"
+            !pip install {BASE}/spirulae_splat-*.whl
+            !pip install {BASE}/fused_bilagrid-*.whl
+            ```
+
+            > **Note:** These wheels are tied to **PyTorch 2.5.1 + CUDA 12.1**. If Colab updates its default PyTorch, re-trigger this workflow via the Actions tab → "Run workflow".
+          files: wheelhouse/*.whl
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

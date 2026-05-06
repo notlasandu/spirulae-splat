@@ -43,7 +43,31 @@ pip install -e . --no-build-isolation  # optionally with -v
 
 The `pip install` step may take a few minutes. If you are running out of system resources during installation, set environment variable `MAX_JOBS` to a lower number (default is max number of concurrent CPU threads).
 
+You can also build for specific GPU architectures without a physical GPU by setting the `TORCH_CUDA_ARCH_LIST` environment variable before installing:
+
+```bash
+export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;9.0"  # T4, A100, A10G/L4, H100
+pip install -e . --no-build-isolation
+```
+
 Use default (master) branch for a stable version. Use `dev` branch if you want to try some more recent features.
+
+## Google Colab
+
+A Colab-ready fork is maintained at **[spirulae-colab](https://github.com/notlasandu/spirulae-splat)** (branch: `spirulae-colab`). It uses **pre-compiled wheel files** distributed via GitHub Releases, so installation takes ~30 seconds with no compilation required.
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/notlasandu/spirulae-splat/blob/spirulae-colab/SpirulaeSplat_Colab.ipynb)
+
+**Requirements:**
+- A **GPU runtime** is required (T4, L4, A100, or H100). Go to **Runtime → Change runtime type → GPU**.
+- A Google Drive account (for dataset input and `.ply` output).
+
+**How it works:**
+1. Pre-built wheels are automatically compiled via GitHub Actions CI/CD using a CUDA Docker image (no physical GPU needed for the build step).
+2. The runtime notebook installs the wheels from GitHub Releases, runs training, and exports a `.ply` file to your Google Drive.
+3. The wheels target CUDA architectures `7.5` (T4), `8.0` (A100), `8.6` (A10G/L4), and `9.0` (H100) — one wheel works across all Colab GPU types.
+
+**To rebuild wheels** (e.g. after a Colab PyTorch update), go to the [Actions tab](https://github.com/notlasandu/spirulae-splat/actions) in the fork and run the **"Build & Release Wheel"** workflow manually.
 
 ## Quick start
 

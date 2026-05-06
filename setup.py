@@ -42,13 +42,28 @@ def get_extensions():
     import torch
     from torch.utils.cpp_extension import CUDAExtension
 
+    # Allow building without a physical GPU if TORCH_CUDA_ARCH_LIST is set.
+    # Accepts formats: "7.5;8.0;8.6;9.0" or "75 80 86 90" or "7.5,8.0"
+    env_arch = os.getenv("TORCH_CUDA_ARCH_LIST", "").strip()
     cuda_arch_list = []
-    if torch.cuda.is_available():
+
+    if env_arch:
+        for arch in env_arch.replace(";", " ").replace(",", " ").split():
+            cuda_arch_list.append(arch.replace(".", ""))
+        print(f"Building for CUDA architectures from TORCH_CUDA_ARCH_LIST: {cuda_arch_list}")
+    elif torch.cuda.is_available():
         for i in range(torch.cuda.device_count()):
             compute_capability = torch.cuda.get_device_capability(i)
             cuda_arch_list.append(f"{compute_capability[0]}{compute_capability[1]}")
+        print(f"Building for detected CUDA architecture(s): {cuda_arch_list}")
     else:
-        raise RuntimeError("CUDA is required for this extension.")
+        raise RuntimeError(
+            "CUDA is required to build this extension. Either:\n"
+            "  1. Attach a CUDA-capable GPU, or\n"
+            "  2. Set the TORCH_CUDA_ARCH_LIST environment variable\n"
+            "     e.g. export TORCH_CUDA_ARCH_LIST='7.5;8.0;8.6;9.0'\n"
+            "     (T4=7.5, A100=8.0, A10G/L4=8.6, H100=9.0)"
+        )
 
     extensions_dir = Path("spirulae_splat/splat/cuda")
     sources = (
