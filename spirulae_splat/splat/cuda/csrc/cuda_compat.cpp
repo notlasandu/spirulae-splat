@@ -9,4 +9,7 @@ namespace c10 { namespace cuda {
     bool CUDAStream::query() const {
         return cudaStreamQuery(stream()) == cudaSuccess;
     }
+    void CUDAStream::synchronize() const {
+        cudaStreamSynchronize(stream());
+    }
 }}
