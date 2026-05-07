@@ -154,7 +154,7 @@ jobs:
       - name: Build spirulae_splat wheel
         env:
           TORCH_CUDA_ARCH_LIST: "7.5;8.0;8.6;9.0"
-          MAX_JOBS: "4"
+          MAX_JOBS: "2"
         run: |
           echo "Building spirulae_splat wheel..."
           pip3 wheel . \
@@ -171,7 +171,7 @@ jobs:
       - name: Build fused_bilagrid wheel
         env:
           TORCH_CUDA_ARCH_LIST: "7.5;8.0;8.6;9.0"
-          MAX_JOBS: "4"
+          MAX_JOBS: "2"
         run: |
           echo "Building fused_bilagrid wheel..."
           pip3 wheel \
