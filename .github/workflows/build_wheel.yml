@@ -166,6 +166,26 @@ jobs:
           ls -lh wheelhouse/
 
       # -----------------------------------------------------------------------
+      # 5b. Check for undefined PyTorch symbols — catches Colab ABI mismatches
+      #     before the wheel is published, avoiding a 50-min rebuild loop.
+      # -----------------------------------------------------------------------
+      - name: Verify no undefined PyTorch symbols
+        run: |
+          WHL=$(ls wheelhouse/spirulae_splat*.whl | head -1)
+          TMP=$(mktemp -d)
+          cd "$TMP"
+          python3 -m zipfile -e "$OLDPWD/$WHL" .
+          SO=$(find . -name "*.so" | head -1)
+          echo "Checking $SO ..."
+          BAD=$(nm -D --undefined-only "$SO" | grep -E 'c10::|at::|torch::|caffe2' || true)
+          if [ -n "$BAD" ]; then
+            echo "❌ Undefined PyTorch symbols found — will crash on Colab:"
+            echo "$BAD"
+            exit 1
+          fi
+          echo "✅ No undefined PyTorch symbols."
+
+      # -----------------------------------------------------------------------
       # 6. Build fused_bilagrid wheel (separate CUDA extension dependency)
       # -----------------------------------------------------------------------
       - name: Build fused_bilagrid wheel
