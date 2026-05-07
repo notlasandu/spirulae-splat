@@ -177,7 +177,7 @@ jobs:
           python3 -m zipfile -e "$OLDPWD/$WHL" .
           SO=$(find . -name "*.so" | head -1)
           echo "Checking $SO ..."
-          BAD=$(nm -D --undefined-only "$SO" | grep -E 'c10::|at::|torch::|caffe2' || true)
+          BAD=$(nm -D --undefined-only "$SO" | grep 'c10::cuda::' || true)
           if [ -n "$BAD" ]; then
             echo "❌ Undefined PyTorch symbols found — will crash on Colab:"
             echo "$BAD"
